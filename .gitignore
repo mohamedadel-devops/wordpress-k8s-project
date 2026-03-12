@@ -1,0 +1,7 @@
+# Ignore any local Kubeconfig files
+echo ".kube/" >> .gitignore
+echo "kubeconfig" >> .gitignore
+
+# If you kept a copy of secrets.yaml with REAL passwords locally, 
+# you should have renamed it or moved it. 
+# If it's in k8s/secrets.yaml, make sure it's the TEMPLATE version.

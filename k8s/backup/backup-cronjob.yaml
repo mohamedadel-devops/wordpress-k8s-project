@@ -1,0 +1,54 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mysql-to-s3-backup
+  namespace: wordpress-app
+spec:
+  schedule: "0 2 * * *"  # 2:00 AM every day
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3  
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: backup-worker
+            image: mariadb:10.6.4-focal 
+            env:
+            - name: DB_HOST
+              value: "mysql-service" 
+            - name: DB_USER
+              value: "admin"
+            - name: S3_BUCKET
+              value: "s3://brandrv-db-backup"
+            - name: MYSQL_PWD # Special env var for mysqldump
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: MYSQL_PASSWORD
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: AWS_SECRET_ACCESS_KEY
+            command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              # Install AWS CLI (MariaDB is Debian-based, so we use apt)
+              apt-get update && apt-get install -y awscli
+              
+              FILENAME="backup-$(date +%Y-%m-%d-%H%M).sql.gz"
+              
+              echo "Starting dump to S3..."
+              mariadb-dump -h $DB_HOST -u $DB_USER | gzip | aws s3 cp - $S3_BUCKET/$FILENAME
+              
+              echo "Backup $FILENAME complete."
+          restartPolicy: OnFailure
