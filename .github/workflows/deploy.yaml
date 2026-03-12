@@ -6,19 +6,20 @@ on:
   pull_request:
     branches: [ "main" ]
 
+# Silences the Node.js 20 deprecation warnings
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   lint-and-validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Install Kubeconform
         run: |
           curl -L https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | tar xz
           sudo mv kubeconform /usr/local/bin/
-
       - name: Validate Manifests
-        # Validates all your manifests including the new ones
         run: kubeconform -summary -strict k8s/*.yaml k8s/backup/*.yaml
 
   deploy:
@@ -58,45 +59,25 @@ jobs:
           AWS_SECRET_ACCESS_KEY_APP: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           CLOUDFLARE_TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
         run: |
-          # 1. Setup Kubeconfig
+          set -x # This prints each command to the log so we see EXACTLY where it fails
           mkdir -p ~/.kube
           echo "$KUBECONFIG_RAW" | base64 -d > ~/.kube/config
           
-          # 2. Apply Namespaces
           kubectl apply -f k8s/namespace.yaml
-          
-          # 3. Inject Secrets into Template and Apply
           envsubst < k8s/secrets.yaml | kubectl apply -f -
-          
-          # 4. Apply Config and Storage
           kubectl apply -f k8s/configmap.yaml
           kubectl apply -f k8s/mysql-pvc.yaml
-          
-          # 5. Apply Internal Networking (The Nginx ClusterIP Service)
           kubectl apply -f k8s/nginx-service.yaml
-          
-          # 6. Deploy Infrastructure (Cloudflare Tunnel)
           kubectl apply -f k8s/cloudflared.yaml
-          
-          # 7. Deploy Database
           kubectl apply -f k8s/mysql-deployment.yaml
           kubectl apply -f k8s/mysql-service.yaml
           
-          # 8. Wait for MySQL to be ready
           kubectl rollout status deployment/mysql-deployment -n wordpress-app --timeout=120s
           
-          # 9. Deploy Application
           kubectl apply -f k8s/wordpress-deployment.yaml
           kubectl apply -f k8s/wordpress-service.yaml
-          
-          # 10. Apply Ingress Rules
           kubectl apply -f k8s/ingress.yaml
-          
-          # 11. Apply Backup CronJobs
           kubectl apply -f k8s/backup/backup-cronjob.yml
-          
-          echo "Deployment Verification:"
-          kubectl get pods,svc,ingress -A
 
       - name: Close K3s API Port
         if: always() 
