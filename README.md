@@ -40,7 +40,7 @@ The infrastructure is designed with security and automation at its core:
 │       └── backup-cronjob.yml # Automated S3 offsite backups
 
 ================================================================================
-🚀 DEPLOYMENT PROCESS & ARCHITECTURE
+## 🚀 DEPLOYMENT PROCESS & ARCHITECTURE
 ================================================================================
 
 This project utilizes a fully automated GitOps CI/CD pipeline. 
